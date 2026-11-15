@@ -1,0 +1,6 @@
+{
+  "name": "eMesh — Messagerie Privée Sécurisée",
+  "description": "Messagerie privée chiffrée de bout en bout à association unique par code ou QR code. Votre confidentialité, votre liberté.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

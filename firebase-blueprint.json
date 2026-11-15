@@ -1,0 +1,213 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Minimal technical profile for optional Firebase cloud sync. Never stores private keys, PINs, or plaintext.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "pseudonym": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "activeDeviceId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "pseudonym", "activeDeviceId", "createdAt", "updatedAt"]
+    },
+    "DeviceIdentity": {
+      "title": "DeviceIdentity",
+      "description": "Public cryptographic identity of a device. Strictly public keys and fingerprint only.",
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "pseudonym": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "identityPublicKey": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "signingPublicKey": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "fingerprint": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "revoked": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["deviceId", "ownerUid", "pseudonym", "identityPublicKey", "signingPublicKey", "fingerprint", "revoked", "createdAt"]
+    },
+    "EncryptedConversation": {
+      "title": "EncryptedConversation",
+      "description": "Strict 1-to-1 encrypted conversation metadata between exactly two paired users/devices.",
+      "type": "object",
+      "properties": {
+        "conversationId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "creatorUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "peerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "creatorDeviceId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "peerDeviceId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "revoked"]
+        },
+        "ephemeralTtlMs": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["conversationId", "creatorUid", "peerUid", "creatorDeviceId", "peerDeviceId", "status", "ephemeralTtlMs", "createdAt", "updatedAt"]
+    },
+    "EncryptedEnvelope": {
+      "title": "EncryptedEnvelope",
+      "description": "End-to-end encrypted message envelope stored temporarily until expiration.",
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "conversationId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "recipientUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderDeviceId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ciphertext": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "iv": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "ephemeralPubKey": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "ratchetCounter": {
+          "type": "integer"
+        },
+        "signature": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "messageType": {
+          "type": "string",
+          "enum": ["text", "audio", "image", "video", "document"]
+        },
+        "ephemeralTtlMs": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["sent", "delivered", "read", "expired"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAtMs": {
+          "type": "integer"
+        }
+      },
+      "required": ["messageId", "conversationId", "senderUid", "recipientUid", "senderDeviceId", "ciphertext", "iv", "ephemeralPubKey", "ratchetCounter", "signature", "messageType", "ephemeralTtlMs", "status", "createdAt", "expiresAtMs"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Technical user profile for optional encrypted device sync."
+    },
+    "/users/{userId}/devices/{deviceId}": {
+      "schema": { "$ref": "#/entities/DeviceIdentity" },
+      "description": "Public cryptographic identity keys for user devices."
+    },
+    "/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/EncryptedConversation" },
+      "description": "Strict two-participant conversation metadata."
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/EncryptedEnvelope" },
+      "description": "Encrypted E2EE message envelopes with ephemeral expiration."
+    }
+  }
+}

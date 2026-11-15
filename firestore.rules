@@ -1,0 +1,301 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isConversationParticipant(convData) {
+      return isSignedIn() && (
+        convData.creatorUid == request.auth.uid ||
+        convData.peerUid == request.auth.uid
+      );
+    }
+
+    // 3. Entity Validation Blueprints (No existing() or diff() inside!)
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'pseudonym', 'activeDeviceId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'pseudonym', 'activeDeviceId', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.pseudonym is string && data.pseudonym.size() >= 2 && data.pseudonym.size() <= 40
+        && isValidId(data.activeDeviceId)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDeviceIdentity(data, userId, deviceId) {
+      return data.keys().hasAll([
+          'deviceId', 'ownerUid', 'pseudonym', 'identityPublicKey',
+          'signingPublicKey', 'fingerprint', 'revoked', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'deviceId', 'ownerUid', 'pseudonym', 'identityPublicKey',
+          'signingPublicKey', 'fingerprint', 'revoked', 'createdAt'
+        ])
+        && isValidId(data.deviceId) && data.deviceId == deviceId
+        && isValidId(data.ownerUid) && data.ownerUid == userId
+        && data.pseudonym is string && data.pseudonym.size() >= 2 && data.pseudonym.size() <= 40
+        && data.identityPublicKey is string && data.identityPublicKey.size() >= 20 && data.identityPublicKey.size() <= 512
+        && data.signingPublicKey is string && data.signingPublicKey.size() >= 20 && data.signingPublicKey.size() <= 512
+        && data.fingerprint is string && data.fingerprint.size() >= 8 && data.fingerprint.size() <= 128
+        && data.revoked is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidConversation(data, conversationId) {
+      return data.keys().hasAll([
+          'conversationId', 'creatorUid', 'peerUid', 'creatorDeviceId',
+          'peerDeviceId', 'status', 'ephemeralTtlMs', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'conversationId', 'creatorUid', 'peerUid', 'creatorDeviceId',
+          'peerDeviceId', 'status', 'ephemeralTtlMs', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.conversationId) && data.conversationId == conversationId
+        && isValidId(data.creatorUid)
+        && isValidId(data.peerUid)
+        && data.creatorUid != data.peerUid
+        && isValidId(data.creatorDeviceId)
+        && isValidId(data.peerDeviceId)
+        && data.status is string && data.status.size() >= 6 && data.status.size() <= 7
+        && (data.status == 'active' || data.status == 'revoked')
+        && data.ephemeralTtlMs is int && data.ephemeralTtlMs >= 0 && data.ephemeralTtlMs <= 86400000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEncryptedEnvelope(data, conversationId, messageId) {
+      return data.keys().hasAll([
+          'messageId', 'conversationId', 'senderUid', 'recipientUid', 'senderDeviceId',
+          'ciphertext', 'iv', 'ephemeralPubKey', 'ratchetCounter',
+          'signature', 'messageType', 'ephemeralTtlMs', 'status',
+          'createdAt', 'expiresAtMs'
+        ])
+        && data.keys().hasOnly([
+          'messageId', 'conversationId', 'senderUid', 'recipientUid', 'senderDeviceId',
+          'ciphertext', 'iv', 'ephemeralPubKey', 'ratchetCounter',
+          'signature', 'messageType', 'ephemeralTtlMs', 'status',
+          'createdAt', 'expiresAtMs'
+        ])
+        && isValidId(data.messageId) && data.messageId == messageId
+        && isValidId(data.conversationId) && data.conversationId == conversationId
+        && isValidId(data.senderUid)
+        && isValidId(data.recipientUid)
+        && data.senderUid != data.recipientUid
+        && isValidId(data.senderDeviceId)
+        && data.ciphertext is string && data.ciphertext.size() >= 1 && data.ciphertext.size() <= 65536
+        && data.iv is string && data.iv.size() >= 8 && data.iv.size() <= 64
+        && data.ephemeralPubKey is string && data.ephemeralPubKey.size() >= 20 && data.ephemeralPubKey.size() <= 512
+        && data.ratchetCounter is int && data.ratchetCounter >= 0
+        && data.signature is string && data.signature.size() >= 16 && data.signature.size() <= 512
+        && data.messageType is string && data.messageType.size() >= 4 && data.messageType.size() <= 10
+        && (
+          data.messageType == 'text' ||
+          data.messageType == 'audio' ||
+          data.messageType == 'image' ||
+          data.messageType == 'video' ||
+          data.messageType == 'document'
+        )
+        && data.ephemeralTtlMs is int && data.ephemeralTtlMs >= 0 && data.ephemeralTtlMs <= 86400000
+        && data.status is string && data.status.size() >= 4 && data.status.size() <= 10
+        && (
+          data.status == 'sent' ||
+          data.status == 'delivered' ||
+          data.status == 'read' ||
+          data.status == 'expired'
+        )
+        && data.createdAt is timestamp
+        && data.expiresAtMs is int && data.expiresAtMs >= 0;
+    }
+
+    // 4. Collection Rules
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if isSignedIn() && existing().uid == request.auth.uid;
+
+      allow create: if isValidId(userId)
+        && isVerifiedUser()
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(userId)
+        && isVerifiedUser()
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['pseudonym', 'activeDeviceId', 'updatedAt']);
+
+      allow delete: if isValidId(userId) && isVerifiedUser() && isOwner(userId);
+
+      match /devices/{deviceId} {
+        allow get: if isValidId(userId) && isValidId(deviceId) && isOwner(userId);
+        allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
+
+        allow create: if isValidId(userId) && isValidId(deviceId)
+          && isVerifiedUser()
+          && isOwner(userId)
+          && isValidDeviceIdentity(incoming(), userId, deviceId)
+          && incoming().revoked == false
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isValidId(userId) && isValidId(deviceId)
+          && isVerifiedUser()
+          && isOwner(userId)
+          && isValidDeviceIdentity(incoming(), userId, deviceId)
+          && existing().revoked == false
+          && incoming().deviceId == existing().deviceId
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().identityPublicKey == existing().identityPublicKey
+          && incoming().signingPublicKey == existing().signingPublicKey
+          && incoming().fingerprint == existing().fingerprint
+          && incoming().createdAt == existing().createdAt
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['pseudonym']) ||
+            (incoming().revoked == true && incoming().diff(existing()).affectedKeys().hasOnly(['revoked']))
+          );
+
+        allow delete: if isValidId(userId) && isValidId(deviceId) && isVerifiedUser() && isOwner(userId);
+      }
+    }
+
+    match /conversations/{conversationId} {
+      allow get: if isValidId(conversationId) && isConversationParticipant(existing());
+      allow list: if isSignedIn() && (
+        existing().creatorUid == request.auth.uid ||
+        existing().peerUid == request.auth.uid
+      );
+
+      allow create: if isValidId(conversationId)
+        && isVerifiedUser()
+        && isValidConversation(incoming(), conversationId)
+        && (incoming().creatorUid == request.auth.uid || incoming().peerUid == request.auth.uid)
+        && incoming().status == 'active'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(conversationId)
+        && isVerifiedUser()
+        && isValidConversation(incoming(), conversationId)
+        && isConversationParticipant(existing())
+        && existing().status == 'active'
+        && incoming().conversationId == existing().conversationId
+        && incoming().creatorUid == existing().creatorUid
+        && incoming().peerUid == existing().peerUid
+        && incoming().creatorDeviceId == existing().creatorDeviceId
+        && incoming().peerDeviceId == existing().peerDeviceId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action: Update Ephemeral TTL
+          (
+            incoming().status == existing().status
+            && incoming().diff(existing()).affectedKeys().hasOnly(['ephemeralTtlMs', 'updatedAt'])
+          ) ||
+          // Action: Revoke Association (Terminal State)
+          (
+            incoming().status == 'revoked'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isValidId(conversationId) && isVerifiedUser() && isConversationParticipant(existing());
+
+      match /messages/{messageId} {
+        allow get: if isValidId(conversationId)
+          && isValidId(messageId)
+          && isSignedIn()
+          && isConversationParticipant(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
+
+        allow list: if isSignedIn() && (
+          existing().senderUid == request.auth.uid ||
+          existing().recipientUid == request.auth.uid
+        );
+
+        allow create: if isValidId(conversationId)
+          && isValidId(messageId)
+          && isVerifiedUser()
+          && isValidEncryptedEnvelope(incoming(), conversationId, messageId)
+          && incoming().senderUid == request.auth.uid
+          && incoming().status == 'sent'
+          && incoming().createdAt == request.time
+          && get(/databases/$(database)/documents/conversations/$(conversationId)).data.status == 'active'
+          && isConversationParticipant(get(/databases/$(database)/documents/conversations/$(conversationId)).data)
+          && (
+            incoming().recipientUid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.creatorUid ||
+            incoming().recipientUid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.peerUid
+          );
+
+        allow update: if isValidId(conversationId)
+          && isValidId(messageId)
+          && isVerifiedUser()
+          && isValidEncryptedEnvelope(incoming(), conversationId, messageId)
+          && existing().status != 'expired'
+          && incoming().messageId == existing().messageId
+          && incoming().conversationId == existing().conversationId
+          && incoming().senderUid == existing().senderUid
+          && incoming().recipientUid == existing().recipientUid
+          && incoming().senderDeviceId == existing().senderDeviceId
+          && incoming().ciphertext == existing().ciphertext
+          && incoming().iv == existing().iv
+          && incoming().ephemeralPubKey == existing().ephemeralPubKey
+          && incoming().ratchetCounter == existing().ratchetCounter
+          && incoming().signature == existing().signature
+          && incoming().messageType == existing().messageType
+          && incoming().ephemeralTtlMs == existing().ephemeralTtlMs
+          && incoming().createdAt == existing().createdAt
+          && get(/databases/$(database)/documents/conversations/$(conversationId)).data.status == 'active'
+          && isConversationParticipant(get(/databases/$(database)/documents/conversations/$(conversationId)).data)
+          && (
+            // Action: Recipient marks delivered or read
+            (
+              existing().senderUid != request.auth.uid
+              && (incoming().status == 'delivered' || incoming().status == 'read')
+              && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'expiresAtMs'])
+            ) ||
+            // Action: Either participant marks expired
+            (
+              incoming().status == 'expired'
+              && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'expiresAtMs'])
+            )
+          );
+
+        allow delete: if isValidId(conversationId)
+          && isValidId(messageId)
+          && isVerifiedUser()
+          && isConversationParticipant(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
+      }
+    }
+  }
+}
